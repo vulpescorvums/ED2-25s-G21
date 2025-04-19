@@ -3,6 +3,7 @@ import argparse
 import pygame
 import math
 from pygame.locals import K_ESCAPE, K_q
+from rl_agent import CarlaPerceptionEnv, RLAgent
 
 try:
     sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
@@ -384,7 +385,12 @@ def run_simulation(args, client):
         bp = world.get_blueprint_library().filter('charger_2020')[0]
         vehicle = world.spawn_actor(bp, random.choice(world.get_map().get_spawn_points()))
         vehicle_list.append(vehicle)
-        vehicle.set_autopilot(True)
+        # vehicle.set_autopilot(True)
+        # === PPO RL Agent Setup - commenting out CARLA autopilotting (above) to have the PPO drive, essentially (below) ===
+        env = CarlaPerceptionEnv(vehicle, world)
+        agent = RLAgent()  # Can use "ppo_carla_model" string to load a pretrained model
+        agent.attach_env(env)
+        obs = env.reset()
 
         # Set up logging for each sensor
         logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
@@ -442,11 +448,20 @@ def run_simulation(args, client):
         call_exit = False
         time_init_sim = timer.time()
         while True:
-            # Carla Tick
-            if args.sync:
-                world.tick()
-            else:
-                world.wait_for_tick()
+            # # Carla Tick
+            # if args.sync:
+            #     world.tick()
+            # else:
+            #     world.wait_for_tick()
+            
+            world.tick()
+
+            # RL control logic
+            action = agent.get_action(obs)
+            obs, reward, done, _ = env.step(action)
+
+            if done:
+                obs = env.reset()
 
             # Render received data
             display_manager.render()
@@ -473,10 +488,10 @@ def run_simulation(args, client):
         # # set the time factor for the replayer
         # client.set_replayer_time_factor(args.time_factor)
 
-        # # set to ignore the hero vehicles or not
+        # # Set to ignore the hero vehicles or not
         # client.set_replayer_ignore_hero(args.ignore_hero)
 
-        # # set to ignore the spectator camera or not
+        # # Set to ignore the spectator camera or not
         # client.set_replayer_ignore_spectator(not args.move_spectator)
         # print(client.replay_file(recorder_path, args.start, args.duration, args.camera, args.spawn_sensors))
         # print("Replaying on file: %s" % recorder_path)
